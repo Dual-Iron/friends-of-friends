@@ -1,6 +1,4 @@
 ﻿using BepInEx;
-using System;
-using System.Linq;
 using System.Security.Permissions;
 using static CreatureTemplate.Relationship.Type;
 
@@ -11,12 +9,12 @@ using static CreatureTemplate.Relationship.Type;
 
 namespace Fof;
 
-[BepInPlugin("com.dual.fof", "FoF", "1.0.0")]
+[BepInPlugin("com.dual.fof", "FoF", "1.0.1")]
 sealed class Plugin : BaseUnityPlugin
 {
     private static Tracker.CreatureRepresentation MutualFriend(AbstractCreature self, AbstractCreature other)
     {
-        if (self.abstractAI?.RealAI?.tracker is not Tracker tracker || other?.abstractAI?.RealAI?.tracker is not Tracker fofTracker || other.state.dead) {
+        if (other.state.dead || self.abstractAI?.RealAI?.tracker is not Tracker tracker || other?.abstractAI?.RealAI?.tracker is not Tracker fofTracker) {
             return null;
         }
 
@@ -28,7 +26,6 @@ sealed class Plugin : BaseUnityPlugin
                 && Friends(self, friendRep)
                 && Friends(other, fofTracker.RepresentationForCreature(friend, addIfMissing: false))
                 ) {
-
                 return friendRep;
             }
         }
@@ -40,38 +37,29 @@ sealed class Plugin : BaseUnityPlugin
         if (other == null) {
             return false;
         }
+        // All slugcats are friends. Peace and love.
+        if (self.realizedObject is Player && other.representedCreature.realizedObject is Player) {
+            return true;
+        }
+        // The target of a friend tracker is obviously a friend.
         if (self.abstractAI.RealAI.friendTracker is FriendTracker f && f.friendRel?.subjectID == other.representedCreature.ID) {
             return true;
         }
+        // Pack members are friends.
         if (other.dynamicRelationship.currentRelationship.type == Pack) {
             return true;
         }
+        // Scavs and lizards with high rep are friends with the player.
         if (self.realizedObject is Scavenger scav) {
-            return other.representedCreature.realizedObject is Player && scav.AI.LikeOfPlayer(other.dynamicRelationship) > 0.35f;
+            return other.representedCreature.realizedObject is Player && scav.AI.LikeOfPlayer(other.dynamicRelationship) > 0.5f;
+        }
+        if (self.realizedObject is Lizard lizard) {
+            return other.representedCreature.realizedObject is Player && lizard.AI.LikeOfPlayer(other) > 0.5f;
         }
         return false;
     }
 
-    public void OnEnable()
-    {
-        On.RelationshipTracker.DynamicRelationship.Update += DynamicRelationship_Update;
-        On.LizardAI.DoIWantToBiteThisCreature += LizardAI_DoIWantToBiteThisCreature;
-    }
-
-    private void DynamicRelationship_Update(On.RelationshipTracker.DynamicRelationship.orig_Update orig, RelationshipTracker.DynamicRelationship self)
-    {
-        orig(self);
-
-        if (UpdatedRelationship(self) is CreatureTemplate.Relationship fof) {
-            if (fof.type != self.currentRelationship.type) {
-                self.rt.SortCreatureIntoModule(self, fof);
-            }
-            self.trackerRep.priority = fof.intensity * self.trackedByModuleWeigth;
-            self.currentRelationship = fof;
-        }
-    }
-
-    private CreatureTemplate.Relationship? UpdatedRelationship(RelationshipTracker.DynamicRelationship rel)
+    private CreatureTemplate.Relationship? FriendOfFriendRelationship(RelationshipTracker.DynamicRelationship rel)
     {
         // If already fine with the target, stay that way.
         if (rel.currentRelationship.type == Ignores || rel.currentRelationship.type == Pack || rel.currentRelationship.type == Uncomfortable) {
@@ -94,13 +82,33 @@ sealed class Plugin : BaseUnityPlugin
         return null;
     }
 
+    public void OnEnable()
+    {
+        On.RelationshipTracker.DynamicRelationship.Update += DynamicRelationship_Update;
+        On.LizardAI.DoIWantToBiteThisCreature += LizardAI_DoIWantToBiteThisCreature;
+    }
+
+    private void DynamicRelationship_Update(On.RelationshipTracker.DynamicRelationship.orig_Update orig, RelationshipTracker.DynamicRelationship self)
+    {
+        if (FriendOfFriendRelationship(self) is CreatureTemplate.Relationship fof) {
+            if (fof.type != self.currentRelationship.type) {
+                self.rt.SortCreatureIntoModule(self, fof);
+            }
+            self.trackerRep.priority = fof.intensity * self.trackedByModuleWeigth;
+            self.currentRelationship = fof;
+        }
+        else {
+            orig(self);
+        }
+    }
+
     private bool LizardAI_DoIWantToBiteThisCreature(On.LizardAI.orig_DoIWantToBiteThisCreature orig, LizardAI self, Tracker.CreatureRepresentation otherCrit)
     {
         if (!orig(self, otherCrit)) {
             return false;
         }
-        // Would we bite our friend? If not, don't bite our friend's friends either.
-        if (MutualFriend(self.creature, otherCrit.representedCreature) is Tracker.CreatureRepresentation friend && !orig(self, friend)) {
+        // If we have a mutual friend, don't fight.
+        if (MutualFriend(self.creature, otherCrit.representedCreature) != null) {
             return false;
         }
         return true;
