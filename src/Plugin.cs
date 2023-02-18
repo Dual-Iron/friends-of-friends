@@ -1,4 +1,5 @@
 ﻿using BepInEx;
+using System;
 using System.Security.Permissions;
 using static CreatureTemplate.Relationship.Type;
 
@@ -9,7 +10,7 @@ using static CreatureTemplate.Relationship.Type;
 
 namespace Fof;
 
-[BepInPlugin("com.dual.fof", "FoF", "1.0.1")]
+[BepInPlugin("com.dual.fof", "FoF", "1.0.2")]
 sealed class Plugin : BaseUnityPlugin
 {
     private static Tracker.CreatureRepresentation MutualFriend(AbstractCreature self, AbstractCreature other)
@@ -49,13 +50,26 @@ sealed class Plugin : BaseUnityPlugin
         if (other.dynamicRelationship.currentRelationship.type == Pack) {
             return true;
         }
-        // Scavs and lizards with high rep are friends with the player.
-        if (self.realizedObject is Scavenger scav) {
-            return other.representedCreature.realizedObject is Player && scav.AI.LikeOfPlayer(other.dynamicRelationship) > 0.5f;
+
+        float rep = 0;
+        if (other.representedCreature.realizedCreature is Player) {
+            if (self.realizedObject is Scavenger scav) rep = scav.AI.LikeOfPlayer(other.dynamicRelationship);
+            if (self.realizedObject is Lizard liz) rep = liz.AI.LikeOfPlayer(other);
+            if (self.realizedObject is Cicada cicada) rep = cicada.AI.LikeOfPlayer(other);
         }
-        if (self.realizedObject is Lizard lizard) {
-            return other.representedCreature.realizedObject is Player && lizard.AI.LikeOfPlayer(other) > 0.5f;
+
+        // If we like the player then chill.
+        if (rep > 0.5f) {
+            return true;
         }
+
+        // If we're neutral to the player, but other creatures like them, then chill.
+        if (self.world.game.GetStorySession?.creatureCommunities is CreatureCommunities communities 
+            && other.representedCreature.realizedCreature is Player p
+            && communities.LikeOfPlayer(self.creatureTemplate.communityID, self.world.region?.regionNumber ?? -1, p.playerState.playerNumber) > 0.8f) {
+            return rep >= 0f;
+        }
+
         return false;
     }
 
