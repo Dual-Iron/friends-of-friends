@@ -6,5 +6,6 @@
   "description": "Makes lizards, scavengers, and slugcats avoid attacking each other if they have a mutual friend.<LINE><LINE>This is a reimplementation of Peace Among Friends by \"the one who screams\" on RainDB.<LINE><LINE>Code at github.com/Dual-Iron/friends-of-friends",
   "requirements": [],
   "requirements_names": [],
+  "tags": [ "Creatures" ],
   "checksum_override_version": false
 }
