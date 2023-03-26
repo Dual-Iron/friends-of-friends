@@ -9,7 +9,7 @@ using static CreatureTemplate.Relationship.Type;
 
 namespace Fof;
 
-[BepInPlugin("com.dual.fof", "FoF", "1.2.0")]
+[BepInPlugin("com.dual.fof", "FoF", "1.2.1")]
 sealed class Plugin : BaseUnityPlugin
 {
     private static Tracker.CreatureRepresentation MutualFriend(AbstractCreature one, AbstractCreature two)
@@ -32,7 +32,7 @@ sealed class Plugin : BaseUnityPlugin
 
     private static bool Friends(AbstractCreature self, AbstractCreature other)
     {
-        if (self == null || other == null || self.state.dead || other.state.dead) {
+        if (self?.state == null || other?.state == null || self.state.dead || other.state.dead) {
             return false;
         }
         // All slugcats are friends. Peace and love.
@@ -45,7 +45,7 @@ sealed class Plugin : BaseUnityPlugin
         }
         // Pack members are friends.
         var otherRep = self.abstractAI?.RealAI?.tracker?.RepresentationForCreature(other, false);
-        if (otherRep?.dynamicRelationship.currentRelationship.type == Pack) {
+        if (otherRep?.dynamicRelationship?.currentRelationship.type == Pack) {
             return true;
         }
 
@@ -62,7 +62,7 @@ sealed class Plugin : BaseUnityPlugin
         }
 
         // If we're neutral to the player, but other creatures like them, then chill.
-        if (self.world.game.GetStorySession?.creatureCommunities is CreatureCommunities communities
+        if (self.creatureTemplate?.communityID != null && self.world.game.session is StoryGameSession sess && sess.creatureCommunities is CreatureCommunities communities
             && other.realizedCreature is Player p
             && communities.LikeOfPlayer(self.creatureTemplate.communityID, self.world.region?.regionNumber ?? -1, p.playerState.playerNumber) > 0.8f) {
             return rep > -0.1f;
